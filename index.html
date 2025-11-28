@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Energy Disaggregator Dashboard</title>
+
+<style>
+/* --- Reset --- */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    font-family: "Inter", Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+}
+
+/* --- Theme Variables --- */
+:root {
+    --bg: #f4f6f8;
+    --card-bg: #ffffff;
+    --text: #222;
+    --text-light: #555;
+    --muted: #6b7280;
+    --accent: #0d6efd;
+    --accent-hover: #0b5ed7;
+    --border: #d8d8d8;
+    --danger: #e63946;
+}
+
+[data-theme="dark"] {
+    --bg: #121212;
+    --card-bg: #1e1e1e;
+    --text: #efefef;
+    --text-light: #bbbbbb;
+    --muted: #9ca3af;
+    --accent: #4f8cff;
+    --accent-hover: #3678f2;
+    --border: #333;
+    --danger: #ff6b6b;
+}
+
+/* Sidebar */
+.sidebar {
+    width: 320px;
+    background: var(--card-bg);
+    border-right: 1px solid var(--border);
+    padding: 30px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 25px;
+}
+
+.sidebar h1 {
+    font-size: 1.7rem;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.sidebar section {
+    background: var(--bg);
+    padding: 18px;
+    border-radius: 14px;
+    border: 1px solid var(--border);
+}
+
+label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+    color: var(--text-light);
+}
+
+input[type="file"],
+input[type="number"] {
+    width: 100%;
+    padding: 8px;
+    margin-top: 5px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--card-bg);
+    color: var(--text);
+}
+
+button {
+    width: 100%;
+    padding: 12px;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-size: 1rem;
+    margin-top: 15px;
+    cursor: pointer;
+    transition: 0.25s;
+}
+button:hover { background: var(--accent-hover); }
+
+/* Main Content */
+.main-content {
+    flex: 1;
+    padding: 30px;
+    overflow-y: auto;
+    background: var(--bg);
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 28px;
+}
+
+.card {
+    background: var(--card-bg);
+    padding: 22px;
+    border-radius: 16px;
+    border: 1px solid var(--border);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+    transition: 0.2s ease;
+}
+.card:hover { box-shadow: 0 4px 10px rgba(0,0,0,0.08); }
+
+.card h2 {
+    margin-bottom: 15px;
+    font-size: 1.3rem;
+}
+
+/* Chart Wrapper — FIXED SIZING */
+.chart-wrapper {
+    width: 100%;
+    height: 340px;
+    position: relative;
+}
+
+/* Confidence Bars */
+.confidence-item { margin-bottom: 14px; }
+.confidence-bar {
+    background: var(--border);
+    height: 12px;
+    width: 100%;
+    border-radius: 8px;
+    overflow: hidden;
+}
+.confidence-fill {
+    height: 100%;
+    background: #28a745;
+    width: 0%;
+    transition: width 0.4s ease-out;
+}
+
+#totalKwh {
+    font-size: 1.8rem;
+    color: var(--accent);
+}
+
+pre {
+    background: var(--card-bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 15px;
+    white-space: pre-wrap;
+    max-height: 300px;
+    overflow-y: auto;
+    font-size: 0.9rem;
+}
+
+@media (max-width: 1000px) {
+    .main-content { grid-template-columns: 1fr; }
+}
+@media (max-width: 700px) {
+    body { flex-direction: column; }
+    .sidebar {
+        width: 100%;
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+    }
+}
+</style>
+</head>
+
+<body>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+    <h1>Energy Disaggregator</h1>
+
+    <form id="uploadForm" enctype="multipart/form-data">
+        <section>
+            <h2 class="section-title">Upload CSV</h2>
+            <label>
+                <span>Select CSV File</span>
+                <input type="file" name="file" accept="text/csv" required />
+            </label>
+        </section>
+
+        <section>
+            <h2 class="section-title">Appliances</h2>
+            <label><input type="checkbox" name="has_hvac" /> HVAC</label>
+            <label><input type="checkbox" name="has_ev" /> EV</label>
+            <label><input type="checkbox" name="has_water_heater" /> Water Heater</label>
+            <label>
+                <span>Number of Refrigerators</span>
+                <input type="number" name="refrigerators" min="0" value="1" />
+            </label>
+        </section>
+
+        <button type="submit">Run Disaggregation</button>
+    </form>
+
+    <button id="toggleTheme">Toggle Theme</button>
+</aside>
+
+<!-- Main Content -->
+<main class="main-content">
+
+    <div class="card">
+        <h2>Breakdown Chart</h2>
+        <div class="chart-wrapper">
+            <canvas id="breakdownChart"></canvas>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Energy Summary</h2>
+        <p>Total Energy:</p>
+<div id="totalKwh" style="font-size:1.8rem;color:var(--accent);font-weight:600;">
+    0 kWh (0 hrs)
+</div>
+
+        <h3 style="margin-top:20px;">Breakdown</h3>
+        <div id="kwhBreakdownContainer"></div>
+
+        <h3 style="margin-top:20px;">Confidence Levels</h3>
+        <div id="confidenceContainer"></div>
+    </div>
+
+    <div class="card" style="grid-column:1/-1;">
+        <h2>Raw JSON Output</h2>
+        <pre id="results">Waiting for input...</pre>
+        <div id="appStatus" style="margin-top:10px;color:var(--muted);font-size:0.9rem;"></div>
+    </div>
+
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+/* Convert "pool_pump" → "Pool Pump" */
+function prettyName(key) {
+    return key.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+}
+
+/* Generate confidence fallback */
+function generateConfidence(breakdown) {
+    const entries = Object.entries(breakdown).filter(([k]) => k !== "total_kWh");
+    const total = entries.reduce((s, [,v]) => s + Number(v||0), 0) || 1;
+
+    const out = {};
+    for (const [k, v] of entries) {
+        const share = Number(v||0) / total;
+        out[k] = Math.min(99, 50 + share * 40); // 50–90%
+    }
+    return out;
+}
+
+/* Ensure confidence always exists */
+function normalizeConfidence(data) {
+    const conf = data.confidence;
+
+    if (!conf || typeof conf !== "object" || Object.keys(conf).length === 0) {
+        return generateConfidence(data.breakdown);
+    }
+
+    const fixed = {};
+    for (const [k, v] of Object.entries(conf)) {
+        fixed[k] = (v == null || isNaN(v)) ? 60 : Number(v);
+    }
+    return fixed;
+}
+
+const form = document.getElementById('uploadForm');
+const resultsPre = document.getElementById('results');
+const totalKwhEl = document.getElementById('totalKwh');
+const kwhBreakdownContainer = document.getElementById('kwhBreakdownContainer');
+const confidenceContainer = document.getElementById('confidenceContainer');
+
+let breakdownChart = null;
+
+const PALETTE = [
+    '#60a5fa','#34d399','#f97316','#f472b6',
+    '#f59e0b','#a78bfa','#06b6d4','#ef4444'
+];
+
+form.addEventListener('submit', async e => {
+    e.preventDefault();
+    showStatus("Processing...");
+    const dataSend = new FormData(form);
+
+    try {
+        const API_BASE = "https://calciferous-overconscientiously-paula.ngrok-free.dev";
+
+const resp = await fetch(`${API_BASE}/predict`, {
+    method: "POST",
+    body: dataSend
+});
+
+        if (!resp.ok) throw new Error("Network error: " + resp.status);
+
+        const data = await resp.json();
+        renderAll(data);
+        showStatus("Done.");
+    } catch (err) {
+        showError(err.message);
+    }
+});
+
+function renderAll(data) {
+window.lastBackendData = data;
+    // If backend returned an error
+    if (data.error) {
+        showError(data.error);
+        return;
+    }
+
+    // Build breakdown from backend components (assume kWh values)
+    const breakdown = {};
+    const comps = data.components || {};
+    for (const [key, value] of Object.entries(comps)) {
+        breakdown[key] = Number(value); // keep kWh as-is
+    }
+
+    // Use backend total_kwh as the single source of truth
+    const backendTotal = Number(data.total_kwh ?? data.totalKwh ?? 0);
+    breakdown.total_kWh = backendTotal;
+
+    // Normalize confidence (frontend fallback uses breakdown)
+    const confidence = normalizeConfidence({
+        breakdown: breakdown,
+        confidence: data.confidence || {}
+    });
+
+    // Update raw JSON viewer with the full backend response + normalized view
+    resultsPre.textContent = JSON.stringify({
+        backend: data,
+        view: {
+            breakdown,
+            confidence
+        }
+    }, null, 2);
+
+    // Render UI
+    renderChart(breakdown);
+    renderKwhDetails(breakdown);
+    renderConfidence(confidence);
+    renderTotal(breakdown);
+}
+
+/* Chart */
+function renderChart(breakdown) {
+    const entries = Object.entries(breakdown).filter(([k]) => k !== "total_kWh");
+    const labels = entries.map(([k]) => prettyName(k));
+    const values = entries.map(([_,v]) => Number(v) || 0);
+
+    const ctx = document.getElementById("breakdownChart").getContext("2d");
+
+    if (breakdownChart) breakdownChart.destroy();
+
+    breakdownChart = new Chart(ctx, {
+        type: "doughnut",
+        data: {
+            labels,
+            datasets: [{
+                data: values,
+                backgroundColor: PALETTE.slice(0, values.length)
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: "bottom" }
+            }
+        }
+    });
+}
+
+/* Breakdown List */
+function renderKwhDetails(breakdown) {
+    kwhBreakdownContainer.innerHTML = '';
+    const entries = Object.entries(breakdown).filter(([k]) => k !== "total_kWh");
+
+    const total = Number(breakdown.total_kWh) || entries.reduce((s, [,v]) => s + Number(v||0), 0);
+
+    entries.forEach(([name, value], idx) => {
+        const v = Number(value) || 0;
+        const pct = total ? (v/total*100) : 0;
+
+        const row = document.createElement('div');
+        row.style.display = 'flex';
+        row.style.justifyContent = 'space-between';
+        row.style.marginBottom = '8px';
+
+        const left = document.createElement('div');
+        left.style.display = 'flex';
+        left.style.alignItems = 'center';
+        left.style.gap = '10px';
+
+        const swatch = document.createElement('div');
+        swatch.style.width = '12px';
+        swatch.style.height = '12px';
+        swatch.style.background = PALETTE[idx % PALETTE.length];
+        swatch.style.borderRadius = '3px';
+
+        const text = document.createElement('div');
+        text.innerHTML = `
+            <div style="font-weight:600">${prettyName(name)}</div>
+            <div style="font-size:0.85rem;color:var(--muted)">${pct.toFixed(1)}%</div>
+        `;
+
+        left.appendChild(swatch);
+        left.appendChild(text);
+
+        const right = document.createElement('div');
+        right.innerHTML =
+            `<div style="font-weight:700;text-align:right">${v.toFixed(2)} kWh</div>`;
+
+        row.appendChild(left);
+        row.appendChild(right);
+        kwhBreakdownContainer.appendChild(row);
+    });
+}
+
+function renderTotal(breakdown) {
+    const total = Number(breakdown.total_kWh) || 0;
+
+    // The backend duration is stored in data.duration_hours
+    const hrs = window.lastBackendData?.duration_hours ?? null;
+
+    if (hrs !== null) {
+        totalKwhEl.textContent = `${total.toFixed(1)} kWh (${hrs.toFixed(1)} hrs)`;
+    } else {
+        totalKwhEl.textContent = `${total.toFixed(1)} kWh`;
+    }
+}
+
+/* Confidence Bars */
+function renderConfidence(conf) {
+    confidenceContainer.innerHTML = "";
+
+    for (const [key, value] of Object.entries(conf)) {
+        const pct = Math.max(0, Math.min(100, Number(value)));
+
+        const item = document.createElement('div');
+        item.className = "confidence-item";
+
+        item.innerHTML = `
+            <div style="display:flex;justify-content:space-between">
+                <div style="font-weight:600">${prettyName(key)}</div>
+                <div style="color:var(--muted)">${pct.toFixed(1)}%</div>
+            </div>
+        `;
+
+        const bar = document.createElement("div");
+        bar.className = "confidence-bar";
+
+        const fill = document.createElement("div");
+        fill.className = "confidence-fill";
+        fill.style.width = pct + "%";
+
+        bar.appendChild(fill);
+        item.appendChild(bar);
+
+        confidenceContainer.appendChild(item);
+    }
+}
+
+/* Status */
+function showStatus(msg){
+    const el = document.getElementById("appStatus");
+    el.style.color = "var(--muted)";
+    el.textContent = msg;
+}
+function showError(msg){
+    const el = document.getElementById("appStatus");
+    el.style.color = "var(--danger)";
+    el.textContent = "Error: " + msg;
+    resultsPre.textContent = "Error: " + msg;
+}
+
+/* Theme Toggle */
+document.getElementById("toggleTheme").addEventListener("click", () => {
+    const cur = document.documentElement.getAttribute("data-theme");
+    if (cur === "dark") document.documentElement.removeAttribute("data-theme");
+    else document.documentElement.setAttribute("data-theme","dark");
+});
+</script>
+
+</body>
+</html>
