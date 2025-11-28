@@ -302,10 +302,11 @@ form.addEventListener('submit', async e => {
     try {
         const API_BASE = "https://calciferous-overconscientiously-paula.ngrok-free.dev";
 
-const resp = await fetch(`${API_BASE}/predict`, {
+const resp = await fetch(`${API_BASE}/disaggregate`, {  // <--- changed from /predict
     method: "POST",
     body: dataSend
 });
+
 
         if (!resp.ok) throw new Error("Network error: " + resp.status);
 
