@@ -300,10 +300,12 @@ form.addEventListener('submit', async e => {
     const dataSend = new FormData(form);
 
     try {
-        const resp = await fetch("http://127.0.0.1:8000/api/disaggregate", {
-            method: "POST",
-            body: dataSend
-        });
+        const API_BASE = "https://calciferous-overconscientiously-paula.ngrok-free.dev";
+
+const resp = await fetch(`${API_BASE}/predict`, {
+    method: "POST",
+    body: dataSend
+});
 
         if (!resp.ok) throw new Error("Network error: " + resp.status);
 
